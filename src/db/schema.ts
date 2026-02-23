@@ -1,3 +1,4 @@
+import { relations } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -67,7 +68,7 @@ export const enrollments = pgTable("enrollments", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull(),
   programId: uuid("program_id").references(() => programs.id),
-  enrolledAt: timestamp("enrolled_at").defaultNow(),
+  enrolledAt: timestamp("enrolled_at").defaultNow().notNull(),
   expectedCompletionDate: timestamp("expected_completion_date"),
   overallProgressPercent: integer("overall_progress_percent").default(0),
   currentStreakDays: integer("current_streak_days").default(0),
@@ -93,3 +94,25 @@ export const lessonCompletions = pgTable(
     uniqueEnrollmentLesson: unique().on(t.enrollmentId, t.lessonId),
   }),
 );
+
+export const modulesRelations = relations(modules, ({ one, many }) => ({
+  program: one(programs, {
+    fields: [modules.programId],
+    references: [programs.id],
+  }),
+  lessons: many(lessons),
+}));
+
+export const lessonsRelations = relations(lessons, ({ one }) => ({
+  module: one(modules, {
+    fields: [lessons.moduleId],
+    references: [modules.id],
+  }),
+}));
+
+export const enrollmentsRelations = relations(enrollments, ({ one }) => ({
+  program: one(programs, {
+    fields: [enrollments.programId],
+    references: [programs.id],
+  }),
+}));
