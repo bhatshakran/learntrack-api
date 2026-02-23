@@ -71,7 +71,7 @@ export const enrollments = pgTable("enrollments", {
   enrolledAt: timestamp("enrolled_at").defaultNow().notNull(),
   expectedCompletionDate: timestamp("expected_completion_date"),
   overallProgressPercent: integer("overall_progress_percent").default(0),
-  currentStreakDays: integer("current_streak_days").default(0),
+  currentStreakDays: integer("current_streak_days").default(0).notNull(),
   lastLessonCompletedAt: timestamp("last_lesson_completed_at"),
   isAtRisk: boolean("is_at_risk").default(false),
   createdAt: timestamp("created_at").defaultNow(),
