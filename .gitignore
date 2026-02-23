@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+dist/
+build/
+
+# Environment Secrets (CRITICAL)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug logs
+pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs
+*.log
+
+# Drizzle / Database
+# Keep the 'drizzle/' folder if you want to commit migrations, 
+# but ignore local sqlite files if you ever use them
+*.db
+*.db-journal
+
+# OS Metadata
+.DS_Store
+Thumbs.db
+
+# IDE Settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+postgres_data/
