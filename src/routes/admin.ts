@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { and, gt, lt, sql, or, eq } from "drizzle-orm";
+import { and, gt, lt, sql, eq } from "drizzle-orm";
 import { db } from "../db";
 import {
   enrollments,
