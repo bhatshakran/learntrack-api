@@ -6,7 +6,6 @@ import {
   lessonCompletions,
   enrollments,
   lessons,
-  modules,
   programs,
 } from "../db/schema";
 import { recalculateProgress } from "../services/progress";

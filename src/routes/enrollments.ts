@@ -4,7 +4,6 @@ import {
   lessonCompletions,
   enrollments,
   lessons,
-  modules,
   programs,
 } from "../db/schema";
 import { eq, and } from "drizzle-orm";
