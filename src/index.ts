@@ -2,9 +2,11 @@ import express from "express";
 import enrollmentRoutes from "./routes/enrollments";
 import webhookRoutes from "./routes/webhook";
 import adminRoutes from "./routes/admin";
-
+// import programRoutes from "./routes/program";
+import cors from "cors";
 const app = express();
 app.use(express.json());
+app.use(cors());
 app.get("/", (req, res) => {
   res.send("Hi there!");
 });

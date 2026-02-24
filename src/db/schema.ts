@@ -38,7 +38,7 @@ export const programs = pgTable("programs", {
   category: categoryEnum("category").notNull(),
   level: levelEnum("level").notNull(),
   durationWeeks: integer("duration_weeks").notNull(),
-  status: statusEnum("status").default("DRAFT"),
+  status: statusEnum("status").default("DRAFT").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -67,13 +67,17 @@ export const lessons = pgTable("lessons", {
 export const enrollments = pgTable("enrollments", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull(),
-  programId: uuid("program_id").references(() => programs.id),
+  programId: uuid("program_id")
+    .references(() => programs.id)
+    .notNull(),
   enrolledAt: timestamp("enrolled_at").defaultNow().notNull(),
-  expectedCompletionDate: timestamp("expected_completion_date"),
-  overallProgressPercent: integer("overall_progress_percent").default(0),
+  expectedCompletionDate: timestamp("expected_completion_date").notNull(),
+  overallProgressPercent: integer("overall_progress_percent")
+    .default(0)
+    .notNull(),
   currentStreakDays: integer("current_streak_days").default(0).notNull(),
-  lastLessonCompletedAt: timestamp("last_lesson_completed_at"),
-  isAtRisk: boolean("is_at_risk").default(false),
+  lastLessonCompletedAt: timestamp("last_lesson_completed_at").notNull(),
+  isAtRisk: boolean("is_at_risk").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -83,7 +87,9 @@ export const lessonCompletions = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     enrollmentId: uuid("enrollment_id").references(() => enrollments.id),
-    lessonId: uuid("lesson_id").references(() => lessons.id),
+    lessonId: uuid("lesson_id")
+      .references(() => lessons.id)
+      .notNull(),
     completedAt: timestamp("completed_at").defaultNow(),
     completionSource: completionSourceEnum("completion_source").notNull(),
     idempotencyKey: text("idempotency_key").unique(),
@@ -110,9 +116,28 @@ export const lessonsRelations = relations(lessons, ({ one }) => ({
   }),
 }));
 
-export const enrollmentsRelations = relations(enrollments, ({ one }) => ({
+export const enrollmentsRelations = relations(enrollments, ({ one, many }) => ({
   program: one(programs, {
     fields: [enrollments.programId],
     references: [programs.id],
   }),
+  lessonCompletions: many(lessonCompletions),
 }));
+
+export const programsRelations = relations(programs, ({ many }) => ({
+  modules: many(modules),
+}));
+
+export const lessonCompletionsRelations = relations(
+  lessonCompletions,
+  ({ one }) => ({
+    enrollment: one(enrollments, {
+      fields: [lessonCompletions.enrollmentId],
+      references: [enrollments.id],
+    }),
+    lesson: one(lessons, {
+      fields: [lessonCompletions.lessonId],
+      references: [lessons.id],
+    }),
+  }),
+);
