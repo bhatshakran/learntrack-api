@@ -17,12 +17,12 @@ const router = Router();
 // Validate the incoming webhook payload
 const webhookSchema = z.object({
   idempotency_key: z.string().min(1),
-  enrollment_id: z.uuid(),
-  lesson_id: z.uuid(),
+  enrollment_id: z.string().min(1),
+  lesson_id: z.string().min(1),
   completed_at: z.iso.datetime(),
 });
 
-router.post("/quizzes/webhook", async (req: Request, res: Response) => {
+router.post("/webhook", async (req: Request, res: Response) => {
   // 1. Validate payload shape
   const parsed = webhookSchema.safeParse(req.body);
   if (!parsed.success) {
