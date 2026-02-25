@@ -7,6 +7,13 @@ import {
   modules,
   programs,
 } from "../db/schema";
+import { param } from "../lib/params";
+import {
+  checkDuplicateCompletions,
+  checkInconsistentProgress,
+  checkOrphanedCompletions,
+  checkProgressOutOfBounds,
+} from "../services/dataQuality";
 
 const router = Router();
 
@@ -16,11 +23,11 @@ const router = Router();
 router.get(
   "/programs/:programId/at-risk-learners",
   async (req: Request, res: Response) => {
-    const { programId } = req.params;
-
+    let { programId } = req.params;
+    programId = param(programId);
     // Verify the program exists
     const program = await db.query.programs.findFirst({
-      where: eq(programs.id, programId as string),
+      where: eq(programs.id, programId),
     });
     if (!program) {
       return res.status(404).json({ error: "Program not found" });
@@ -29,7 +36,7 @@ router.get(
     // Pull all at-risk enrollments for this program
     const atRiskEnrollments = await db.query.enrollments.findMany({
       where: and(
-        eq(enrollments.programId, programId as string),
+        eq(enrollments.programId, programId),
         eq(enrollments.isAtRisk, true),
       ),
     });
@@ -126,153 +133,39 @@ router.get(
 // Detects all 5 anomaly types from the spec
 // ----------------------------------------------------------------
 router.get("/data-quality/report", async (req: Request, res: Response) => {
-  const details: object[] = [];
-
-  // --- 1. Progress > 100% ---
-  const progressOver100 = await db
-    .select({
-      id: enrollments.id,
-      progress: enrollments.overallProgressPercent,
-    })
-    .from(enrollments)
-    .where(gt(enrollments.overallProgressPercent, 100));
-
-  progressOver100.forEach((e) =>
-    details.push({
-      type: "progress_over_100",
-      enrollment_id: e.id,
-      progress: e.progress,
-    }),
+  const [bounds, orphaned, duplicates, inconsistent, total] = await Promise.all(
+    [
+      checkProgressOutOfBounds(),
+      checkOrphanedCompletions(),
+      checkDuplicateCompletions(),
+      checkInconsistentProgress(),
+      db.select({ count: sql<number>`count(*)` }).from(enrollments),
+    ],
   );
 
-  // --- 2. Progress < 0% ---
-  const progressUnder0 = await db
-    .select({
-      id: enrollments.id,
-      progress: enrollments.overallProgressPercent,
-    })
-    .from(enrollments)
-    .where(lt(enrollments.overallProgressPercent, 0));
-
-  progressUnder0.forEach((e) =>
-    details.push({
-      type: "progress_under_0",
-      enrollment_id: e.id,
-      progress: e.progress,
-    }),
-  );
-
-  // --- 3. Orphaned completions ---
-  // LessonCompletion records pointing to a lesson_id that no longer exists
-  const orphanedCompletions = await db.execute(sql`
-    SELECT lc.lesson_id, COUNT(*) as count
-    FROM lesson_completions lc
-    LEFT JOIN lessons l ON lc.lesson_id = l.id
-    WHERE l.id IS NULL
-    GROUP BY lc.lesson_id
-  `);
-
-  orphanedCompletions.rows.forEach((row: any) =>
-    details.push({
-      type: "orphaned_completion",
-      lesson_id: row.lesson_id,
-      count: Number(row.count),
-    }),
-  );
-
-  // --- 4. Duplicate completions ---
-  // Same (enrollment_id, lesson_id) appears more than once
-  // This should never happen due to the unique constraint, but
-  // catches cases where the constraint was added after bad data crept in
-  const duplicateCompletions = await db.execute(sql`
-    SELECT enrollment_id, lesson_id, COUNT(*) as count
-    FROM lesson_completions
-    GROUP BY enrollment_id, lesson_id
-    HAVING COUNT(*) > 1
-  `);
-
-  duplicateCompletions.rows.forEach((row: any) =>
-    details.push({
-      type: "duplicate_completion",
-      enrollment_id: row.enrollment_id,
-      lesson_id: row.lesson_id,
-      count: Number(row.count),
-    }),
-  );
-
-  // --- 5. Inconsistent progress ---
-  // Recalculate actual progress for every enrollment and compare
-  // to what's stored. Flags any mismatch.
-  const allEnrollments = await db.query.enrollments.findMany();
-  const inconsistentProgress: object[] = [];
-
-  for (const enrollment of allEnrollments) {
-    // Get all modules for this program
-    const programModules = await db.query.modules.findMany({
-      where: eq(modules.programId, enrollment.programId!),
-      with: { lessons: true },
-    });
-
-    // Get all completions for this enrollment
-    const completions = await db
-      .select()
-      .from(lessonCompletions)
-      .where(eq(lessonCompletions.enrollmentId, enrollment.id));
-
-    const completedIds = new Set(completions.map((c) => c.lessonId));
-
-    // Recalculate using the same formula as the progress service
-    const moduleProgresses = programModules.map((mod) => {
-      const total = mod.lessons.length;
-      if (total === 0) return 100;
-      const completed = mod.lessons.filter((l) =>
-        completedIds.has(l.id),
-      ).length;
-      return (completed / total) * 100;
-    });
-
-    const actualProgress =
-      moduleProgresses.length === 0
-        ? 0
-        : Math.min(
-            100,
-            Math.max(
-              0,
-              Math.round(
-                moduleProgresses.reduce((a, b) => a + b, 0) /
-                  moduleProgresses.length,
-              ),
-            ),
-          );
-
-    const storedProgress = enrollment.overallProgressPercent ?? 0;
-
-    if (actualProgress !== storedProgress) {
-      inconsistentProgress.push({
-        type: "inconsistent_progress",
-        enrollment_id: enrollment.id,
-        stored_progress: storedProgress,
-        actual_progress: actualProgress,
-        difference: storedProgress - actualProgress,
-      });
-    }
-  }
-
-  details.push(...inconsistentProgress);
-
-  // --- Build final report ---
-  const totalEnrollments = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(enrollments);
+  const details = [
+    ...orphaned.map((r) => ({
+      type: "orphaned_completions",
+      lesson_id: r.lesson_id,
+      count: Number(r.count),
+    })),
+    ...duplicates.map((r) => ({
+      type: "duplicate_completions",
+      enrollment_id: r.enrollment_id,
+      lesson_id: r.lesson_id,
+      count: Number(r.count),
+    })),
+    ...inconsistent.map((r) => ({ type: "inconsistent_progress", ...r })),
+  ];
 
   return res.json({
-    total_enrollments_checked: Number(totalEnrollments[0].count),
+    total_enrollments_checked: Number(total[0].count),
     anomalies: {
-      progress_over_100: progressOver100.length,
-      progress_under_0: progressUnder0.length,
-      orphaned_completions: orphanedCompletions.rows.length,
-      duplicate_completions: duplicateCompletions.rows.length,
-      inconsistent_progress: inconsistentProgress.length,
+      progress_over_100: bounds.over100.map((e) => e.id),
+      progress_under_0: bounds.under0.map((e) => e.id),
+      orphaned_completions: orphaned.length,
+      duplicate_completions: duplicates.length,
+      inconsistent_progress: inconsistent.length,
     },
     details,
   });
