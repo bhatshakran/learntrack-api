@@ -12,3 +12,11 @@ services:
     environment:
       DATABASE_URL: postgres://user:password@db:5432/learntrack
     depends_on: [db]
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    ports: ["3001:3001"]
+    environment:
+      NEXT_PUBLIC_API_BASE: http://localhost:3000
+    depends_on: [app]

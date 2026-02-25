@@ -1,4 +1,16 @@
-# LearnTrack – Learner Progress Tracking API
+# LearnTrack – Learner Progress Tracking
+
+## 🎥 Demo & Preview
+
+### 🎬 App Walkthrough Video
+
+[![Watch the demo](homepage.png)](https://youtu.be/LC5nzl8j8-0)
+
+> A short walkthrough covering:
+>
+> - Learner progress tracking
+> - Data quality checks & fixes
+> - Admin utilities and insights
 
 # 🚀 Tech Stack
 
@@ -8,6 +20,15 @@
 - **Express.js** — lightweight, flexible HTTP framework
 - **Drizzle ORM** — type-safe SQL with minimal abstraction
 - **PostgreSQL** — relational integrity and strong constraints
+
+## Frontend
+
+- **Next.js (App Router)** — full-stack React framework with server-side rendering and file-based routing
+- **React + TypeScript** — type-safe, component-driven UI development
+- **Tailwind CSS** — utility-first styling for rapid and consistent design
+- **Next Fonts (Geist)** — optimized, self-hosted typography
+
+> **Note:** The frontend was primarily scaffolded and refined with the help of AI tools.
 
 ## Validation & Safety
 
@@ -129,7 +150,6 @@ pnpm run test:unit     # unit tests only
 
 # 🏁 Future Improvements
 
-- Leaderboard API
 - Bulk webhook ingestion
 
 ---
@@ -138,9 +158,11 @@ pnpm run test:unit     # unit tests only
 
 - [x] Dockerized (mandatory)
 - [x] Seed data (mandatory)
-- [x] Data quality tools
+- [x] Data quality tools/api (mandatory)
 - [x] Unit tests (recommended)
 - [x] Curl examples (recommended)
-- [ ] Integration tests (recommended)
+- [x] Leaderboard (optional)
+- [ ] Integration tests
+- [x] Frontend (additional)
 
 ---

@@ -34,7 +34,7 @@ I denormalized the progress percentage and at-risk status because these are 'Rea
 
 Example: If the progress percentage was not denormalized. For each student we would have to look up enrollment,then lessons in the program,his completions, then do the math: completions/total lessons \* 100.
 
-Now if there are 10,000 students suppose and all of them click on their dashboards this heavy calculation would run 10,000x which would put a heavy load on the database and the process would be slow.
+Now suppose if there are 10,000 students and all of them click on their dashboards, this heavy calculation would run 10,000x which would put a heavy load on the database and the process would be slow.
 
 ---
 
@@ -50,10 +50,16 @@ Progress recalculates on:
 
 # ⚡ Concurrency & Consistency
 
-## Potential Race Conditions
+1. Unique constraint prevents duplicate completions:
+   The lesson_completions table has a unique constraint on (enrollment_id, lesson_id). If two requests try to mark the same lesson complete simultaneously, only one INSERT succeeds at the database level — the other gets rejected before any progress calculation happens.
+2. Progress is always recalculated from scratch:
+   Rather than incrementing a stored counter (progress + 1), every completion triggers a full recalculation by querying all completed lessons from the database and recomputing the average. This means:
+   - There is no accumulated state that can get corrupted
+   - Even if two different lessons complete at the exact same millisecond and their progress writes briefly race, the stored value will be corrected on the very next completion
+   - The completions table is always the source of truth — the stored overall_progress_percent is a cache of what the completions table says, not an independent value
 
-- Multiple completions at same time
-- Duplicate webhook deliveries
+3. The tradeoff:
+   There is a small window where overall_progress_percent could be stale by one completion — for example if Alice completes lesson A and lesson B at the same instant, one update might overwrite the other. In practice this is extremely unlikely for a learning platform where completions happen minutes or hours apart, not milliseconds. If this became a concern at scale, the fix would be to wrap the completion + recalculation in a SELECT FOR UPDATE transaction to serialize writes per enrollment.
 
 ## Mitigations
 

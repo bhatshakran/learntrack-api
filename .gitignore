@@ -37,6 +37,5 @@ Thumbs.db
 # Docker
 postgres_data/
 
-frontend
-demo.md
-program.ts
+# frontend
+demo.md (personal use case)
