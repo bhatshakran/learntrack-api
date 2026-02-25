@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { and, gt, lt, sql, eq } from "drizzle-orm";
+import { and, sql, eq, desc } from "drizzle-orm";
 import { db } from "../db";
 import {
   enrollments,
@@ -14,6 +14,7 @@ import {
   checkOrphanedCompletions,
   checkProgressOutOfBounds,
 } from "../services/dataQuality";
+import { recalculateProgress } from "../services/progress";
 
 const router = Router();
 
@@ -178,45 +179,19 @@ router.get("/data-quality/report", async (req: Request, res: Response) => {
 router.post(
   "/data-quality/fix-inconsistent-progress",
   async (req: Request, res: Response) => {
+    // 1. Delete orphaned completions first
+    const orphaned = await db.execute(sql`
+    DELETE FROM lesson_completions
+    WHERE lesson_id NOT IN (SELECT id FROM lessons)
+    RETURNING enrollment_id, lesson_id
+  `);
+
+    // 2. Fix inconsistent progress (same as before)
     const allEnrollments = await db.query.enrollments.findMany();
     const fixed: object[] = [];
 
     for (const enrollment of allEnrollments) {
-      const programModules = await db.query.modules.findMany({
-        where: eq(modules.programId, enrollment.programId!),
-        with: { lessons: true },
-      });
-
-      const completions = await db
-        .select()
-        .from(lessonCompletions)
-        .where(eq(lessonCompletions.enrollmentId, enrollment.id));
-
-      const completedIds = new Set(completions.map((c) => c.lessonId));
-
-      const moduleProgresses = programModules.map((mod) => {
-        const total = mod.lessons.length;
-        if (total === 0) return 100;
-        const completed = mod.lessons.filter((l) =>
-          completedIds.has(l.id),
-        ).length;
-        return (completed / total) * 100;
-      });
-
-      const actualProgress =
-        moduleProgresses.length === 0
-          ? 0
-          : Math.min(
-              100,
-              Math.max(
-                0,
-                Math.round(
-                  moduleProgresses.reduce((a, b) => a + b, 0) /
-                    moduleProgresses.length,
-                ),
-              ),
-            );
-
+      const actualProgress = await recalculateProgress(enrollment.id);
       const storedProgress = enrollment.overallProgressPercent ?? 0;
 
       if (actualProgress !== storedProgress) {
@@ -237,10 +212,54 @@ router.post(
     }
 
     return res.json({
+      orphaned_completions_deleted: orphaned.rows.length,
       fixed_count: fixed.length,
       fixed,
     });
   },
 );
+// ----------------------------------------------------------------
+// GET /admin/leaderboard?programId=...&limit=10
+// Fetches the leaderboard
+// ----------------------------------------------------------------
+router.get("/leaderboard", async (req: Request, res: Response) => {
+  const { programId, limit = "10" } = req.query;
+
+  const top = await db
+    .select({
+      enrollment_id: enrollments.id,
+      user_id: enrollments.userId,
+      program_id: enrollments.programId,
+      progress_percent: enrollments.overallProgressPercent,
+      current_streak_days: enrollments.currentStreakDays,
+      last_lesson_completed_at: enrollments.lastLessonCompletedAt,
+    })
+    .from(enrollments)
+    .where(
+      programId ? eq(enrollments.programId, programId as string) : undefined,
+    )
+    .orderBy(
+      desc(enrollments.overallProgressPercent),
+      desc(enrollments.currentStreakDays), // tiebreak by streak
+    )
+    .limit(Math.min(Number(limit), 100)); // cap at 100
+
+  return res.json({
+    leaderboard: top.map((e, i) => ({
+      rank: i + 1,
+      enrollment_id: e.enrollment_id,
+      user_id: e.user_id,
+      program_id: e.program_id,
+      progress_percent: e.progress_percent ?? 0,
+      current_streak_days: e.current_streak_days,
+      last_lesson_completed_at: e.last_lesson_completed_at,
+    })),
+    total: top.length,
+    filters: {
+      program_id: programId ?? null,
+      limit: Number(limit),
+    },
+  });
+});
 
 export default router;
