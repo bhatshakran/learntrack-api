@@ -4,7 +4,7 @@
 
 ### 🎬 App Walkthrough Video
 
-[![Watch the demo](homepage.png)](https://youtu.be/LC5nzl8j8-0)
+[![Watch the demo](homepage.png)](https://youtu.be/-bxT1Lgje_c)
 
 > A short walkthrough covering:
 >
@@ -85,6 +85,24 @@ This will:
 - Start PostgreSQL
 - Build and run the API
 
+## Check docker images
+
+```bash
+docker compose ps
+```
+
+## Setup the schema/db
+
+```bash
+docker exec -it [your_container_name] pnpm drizzle-kit push
+```
+
+## Seed database
+
+```bash
+docker exec -it [your_container_name] npx tsx seed.ts
+```
+
 ---
 
 # ▶️ How to Run
@@ -99,12 +117,6 @@ docker-compose up --build 2>&1 | tee docker.log
 
 ```bash
 docker-compose down
-```
-
-## Seed database
-
-```bash
-pnpm run seed
 ```
 
 # 📡 API Documentation
